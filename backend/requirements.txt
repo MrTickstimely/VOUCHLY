@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn>=0.29
+SQLAlchemy>=2.0,<3.0
+uuid-utils>=0.10,<1.0
+PyJWT>=2.8,<3.0
+httpx>=0.27
+anthropic>=0.40
+chromadb>=0.5
