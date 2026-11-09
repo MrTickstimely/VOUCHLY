@@ -1,0 +1,251 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+
+/* Colour tokens (R G B). "white" is the surface colour, so text-white on bg-ink flips correctly in dark mode. */
+:root {
+  color-scheme: light;
+  --c-white: 255 255 255; --c-paper: 244 246 249; --c-ink: 22 35 59; --c-mute: 86 98 119; --c-line: 213 219 229;
+  --c-pass: 11 110 90; --c-flag: 143 90 10; --c-fail: 166 30 39; --c-mark: 255 233 168; --c-accent: 43 74 203;
+  --stroke: rgb(22 35 59 / 0.6);          /* pencil outline */
+  --hi: rgb(255 255 255 / 0.8);           /* top highlight on raised things */
+  --sh: rgb(22 35 59 / 0.18);             /* soft drop shadow */
+  --sh-hard: rgb(22 35 59 / 0.28);        /* thick bottom edge of raised things */
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-white: 23 32 51; --c-paper: 14 21 36; --c-ink: 230 236 247; --c-mute: 154 167 189; --c-line: 43 56 80;
+  --c-pass: 63 191 159; --c-flag: 224 166 74; --c-fail: 240 122 130; --c-mark: 99 80 20; --c-accent: 124 150 255;
+  --stroke: rgb(230 236 247 / 0.38);
+  --hi: rgb(255 255 255 / 0.09);
+  --sh: rgb(0 0 0 / 0.45);
+  --sh-hard: rgb(0 0 0 / 0.6);
+}
+body { @apply bg-paper text-ink font-sans antialiased; }
+:focus-visible { outline: 2px solid rgb(var(--c-accent)); outline-offset: 2px; }
+.legal h2 { @apply mt-8 text-xl font-semibold; }
+.legal p, .legal li { @apply mt-3 leading-relaxed; }
+.legal ul { @apply list-disc pl-6; }
+.legal a { @apply underline; }
+/* TextRoll: people who ask for less motion get the plain text, with no animation. */
+@media (prefers-reduced-motion: reduce) {
+  .text-roll-layer { display: none; }
+  .text-roll-size { visibility: visible !important; }
+}
+/* Dialogs fade in briefly when a person opens them. Skipped for reduced motion. */
+@keyframes dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+dialog[open] { animation: dialog-in 150ms ease-out; }
+dialog[open]::backdrop { animation: dialog-fade 150ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  dialog[open], dialog[open]::backdrop { animation: none; }
+}
+
+/* Theme switch, from Uiverse.io by Galahhad. Checked = dark mode. */
+.ui-switch {
+  --switch-bg: rgb(135, 150, 165);
+  --switch-width: 48px;
+  --switch-height: 20px;
+  --circle-diameter: 32px;
+  --circle-bg: rgb(0, 56, 146);
+  --circle-inset: calc((var(--circle-diameter) - var(--switch-height)) / 2);
+  display: inline-block;
+  padding: calc(var(--circle-inset) + 2px) 0;
+}
+/* Hidden visually but still reachable by keyboard and screen readers. */
+.ui-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.ui-switch .slider {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  display: block;
+  width: var(--switch-width); height: var(--switch-height);
+  background: var(--switch-bg); border-radius: 999px; position: relative; cursor: pointer;
+}
+.ui-switch .slider .circle {
+  top: calc(var(--circle-inset) * -1); left: 0;
+  width: var(--circle-diameter); height: var(--circle-diameter);
+  position: absolute; background: var(--circle-bg); border-radius: inherit;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjAiIHdpZHRoPSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj4KICAgIDxwYXRoIGZpbGw9IiNmZmYiCiAgICAgICAgZD0iTTkuMzA1IDEuNjY3VjMuNzVoMS4zODlWMS42NjdoLTEuMzl6bS00LjcwNyAxLjk1bC0uOTgyLjk4Mkw1LjA5IDYuMDcybC45ODItLjk4Mi0xLjQ3My0xLjQ3M3ptMTAuODAyIDBMMTMuOTI3IDUuMDlsLjk4Mi45ODIgMS40NzMtMS40NzMtLjk4Mi0uOTgyek0xMCA1LjEzOWE0Ljg3MiA0Ljg3MiAwIDAwLTQuODYyIDQuODZBNC44NzIgNC44NzIgMCAwMDEwIDE0Ljg2MiA0Ljg3MiA0Ljg3MiAwIDAwMTQuODYgMTAgNC44NzIgNC44NzIgMCAwMDEwIDUuMTM5em0wIDEuMzg5QTMuNDYyIDMuNDYyIDAgMDExMy40NzEgMTBhMy40NjIgMy40NjIgMCAwMS0zLjQ3MyAzLjQ3MkEzLjQ2MiAzLjQ2MiAwIDAxNi41MjcgMTAgMy40NjIgMy40NjIgMCAwMTEwIDYuNTI4ek0xLjY2NSA5LjMwNXYxLjM5aDIuMDgzdi0xLjM5SDEuNjY2em0xNC41ODMgMHYxLjM5aDIuMDg0di0xLjM5aC0yLjA4NHpNNS4wOSAxMy45MjhMMy42MTYgMTUuNGwuOTgyLjk4MiAxLjQ3My0xLjQ3My0uOTgyLS45ODJ6bTkuODIgMGwtLjk4Mi45ODIgMS40NzMgMS40NzMuOTgyLS45ODItMS40NzMtMS40NzN6TTkuMzA1IDE2LjI1djIuMDgzaDEuMzg5VjE2LjI1aC0xLjM5eiIgLz4KPC9zdmc+");
+  background-repeat: no-repeat; background-position: center center;
+  transition: left 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms, transform 150ms cubic-bezier(0.4, 0, 0.2, 1) 0ms;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0px 2px 1px -1px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12);
+}
+.ui-switch .slider .circle::before {
+  content: ""; position: absolute; width: 100%; height: 100%;
+  background: rgba(255, 255, 255, 0.75); border-radius: inherit; transition: all 500ms; opacity: 0;
+}
+.ui-switch input:checked + .slider .circle {
+  left: calc(100% - var(--circle-diameter));
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjAiIHdpZHRoPSIyMCIgdmlld0JveD0iMCAwIDIwIDIwIj4KICAgIDxwYXRoIGZpbGw9IiNmZmYiCiAgICAgICAgZD0iTTQuMiAyLjVsLS43IDEuOC0xLjguNyAxLjguNy43IDEuOC42LTEuOEw2LjcgNWwtMS45LS43LS42LTEuOHptMTUgOC4zYTYuNyA2LjcgMCAxMS02LjYtNi42IDUuOCA1LjggMCAwMDYuNiA2LjZ6IiAvPgo8L3N2Zz4=");
+}
+.ui-switch input:active + .slider .circle::before { transition: 0s; opacity: 1; width: 0; height: 0; }
+.ui-switch input:focus-visible + .slider { outline: 2px solid rgb(var(--c-accent)); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-switch .slider .circle, .ui-switch .slider .circle::before { transition: none; }
+}
+
+/* ============================================================
+   Paper-and-ink look: skeuomorphic surfaces + hand-drawn edges.
+   Everything below is plain CSS on top of the existing classes,
+   so removing this block returns the site to the flat design.
+   ============================================================ */
+:root {
+  --wobble-a: 14px 6px 12px 7px / 7px 12px 6px 14px;
+  --wobble-b: 6px 13px 7px 12px / 12px 7px 13px 6px;
+  --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Notebook paper: grain plus a faint dot grid. */
+body {
+  background-image: var(--paper-grain), radial-gradient(rgb(var(--c-ink) / 0.09) 1px, transparent 1.2px);
+  background-size: 160px 160px, 24px 24px;
+}
+
+/* Hand-drawn outlines: lopsided corners, uneven line weight, pencil colour. */
+[class~="rounded"], [class~="rounded-md"], [class~="rounded-lg"] { border-radius: var(--wobble-a); }
+[class~="rounded"]:nth-child(even), [class~="rounded-md"]:nth-child(even) { border-radius: var(--wobble-b); }
+[class~="rounded-sm"] { border-radius: 3px 7px 4px 6px / 6px 4px 7px 3px; }
+[class~="rounded"][class~="border"], [class~="rounded-md"][class~="border"], [class~="rounded-lg"][class~="border"] {
+  border-width: 2px 2.5px 3px 2px; border-color: var(--stroke);
+}
+[class~="border-ink"][class~="rounded"] { border-color: rgb(var(--c-ink)); }
+
+/* Raised paper: cards, panels, dialog, dock. */
+[class~="bg-white"][class~="rounded"], [class~="bg-white"][class~="rounded-lg"] {
+  background-image: linear-gradient(180deg, rgb(var(--c-white)), color-mix(in srgb, rgb(var(--c-white)) 94%, rgb(var(--c-ink))));
+  box-shadow: inset 0 1px 0 var(--hi), 0 2px 0 var(--sh-hard), 0 10px 18px -10px var(--sh);
+}
+
+/* Buttons: pressable. Raised face, thick bottom edge, sinks when clicked. */
+.btn {
+  @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium disabled:opacity-40;
+  border-radius: var(--wobble-a); border: 2px solid var(--stroke);
+  color: rgb(var(--c-ink));
+  background: linear-gradient(180deg, rgb(var(--c-white)), color-mix(in srgb, rgb(var(--c-white)) 82%, rgb(var(--c-ink))));
+  box-shadow: inset 0 1px 0 var(--hi), 0 3px 0 var(--sh-hard), 0 8px 12px -6px var(--sh);
+  transition: transform 90ms ease, box-shadow 90ms ease, filter 120ms ease;
+}
+.btn:nth-of-type(even) { border-radius: var(--wobble-b); }
+.btn:hover { filter: brightness(1.04); transform: translateY(-1px); }
+.btn:active:not(:disabled) {
+  transform: translateY(3px); filter: none;
+  box-shadow: inset 0 2px 4px var(--sh), 0 0 0 var(--sh-hard);
+}
+.btn-primary {
+  border-color: rgb(var(--c-ink)); color: rgb(var(--c-white));
+  background: linear-gradient(180deg, color-mix(in srgb, rgb(var(--c-ink)) 80%, rgb(var(--c-white))), rgb(var(--c-ink)));
+  text-shadow: 0 -1px 0 rgb(0 0 0 / 0.25);
+}
+
+/* Form fields: pressed into the page. */
+select[class][class], textarea[class][class], input[class][class]:not([type="checkbox"]):not([type="radio"]) {
+  background-color: color-mix(in srgb, rgb(var(--c-white)) 70%, rgb(var(--c-paper)));
+  background-image: none;
+  box-shadow: inset 0 2px 4px var(--sh), 0 1px 0 var(--hi);
+}
+textarea[class] { font-family: ui-sans-serif, system-ui, sans-serif; }
+
+/* Header, footer and sidebar: stitched seams. */
+header[class], footer.site-footer, aside.sidebar {
+  background-image: linear-gradient(180deg, rgb(var(--c-white)), color-mix(in srgb, rgb(var(--c-white)) 92%, rgb(var(--c-ink))));
+  border-style: dashed; border-color: var(--stroke); border-width: 0 0 2px 0;
+  box-shadow: inset 0 1px 0 var(--hi), 0 6px 14px -10px var(--sh);
+}
+footer.site-footer { border-width: 2px 0 0 0; }
+@media (min-width: 768px) { aside.sidebar { border-width: 0 2px 0 0; } }
+
+/* Headings: handwriting. */
+h1.font-serif, h2.font-serif { letter-spacing: -0.01em; }
+
+/* Highlighter pen instead of a flat block. */
+mark, [class~="bg-mark"] {
+  background-color: transparent;
+  background-image: linear-gradient(176deg, transparent 12%, rgb(var(--c-mark)) 12%, rgb(var(--c-mark)) 92%, transparent 92%);
+  border-radius: 3px 9px 4px 10px; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  color: rgb(var(--c-ink));
+}
+
+/* Landing page: taped sample card and pinned step notes. */
+.tilt { transform: rotate(1.2deg); }
+.tape { position: relative; }
+.tape::before {
+  content: ""; position: absolute; top: -12px; left: 50%; width: 96px; height: 24px; margin-left: -48px; transform: rotate(-3deg);
+  background: linear-gradient(180deg, rgb(255 233 168 / 0.85), rgb(240 214 140 / 0.85));
+  box-shadow: 0 1px 3px var(--sh); border-radius: 2px; opacity: 0.9;
+}
+.note { position: relative; }
+.note:nth-child(odd) { transform: rotate(-0.8deg); }
+.note:nth-child(even) { transform: rotate(0.7deg); }
+.note::before {
+  content: ""; position: absolute; top: 8px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff9a8f, #c8372d 60%, #8f2019);
+  box-shadow: 1px 3px 3px rgb(0 0 0 / 0.35), inset 0 -1px 2px rgb(0 0 0 / 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:hover, .btn:active:not(:disabled) { transform: none; }
+}
+
+/* Draft text being reviewed stays in a plain, readable face. */
+.proof { font-family: ui-serif, Georgia, serif; }
+
+/* Role radio list, from Uiverse.io by reglobby. Added: a steady selected state, a tick, theme-safe sizing. */
+.input { display: flex; flex-direction: column; width: 100%; background-color: #0D1117; justify-content: center; border-radius: 5px; padding: 4px; border: 2px solid var(--stroke); }
+.input.role-radio { border-radius: var(--wobble-a); box-shadow: inset 0 2px 5px rgb(0 0 0 / 0.5), 0 1px 0 var(--hi); }
+.value { background-color: transparent; border: none; padding: 10px; color: white; display: flex; align-items: center; position: relative; gap: 8px; cursor: pointer; border-radius: 4px; font-size: 0.875rem; text-align: left; }
+.value:not(:active):hover, .value:focus { background-color: #21262C; }
+.value:focus, .value:active, .value[aria-checked="true"] { background-color: #1A1F24; outline: none; }
+.value:focus-visible { box-shadow: 0 0 0 2px #2F81F7; }
+.value::before { content: ""; position: absolute; top: 5px; left: -10px; width: 5px; height: 80%; background-color: #2F81F7; border-radius: 5px; opacity: 0; }
+.value:focus::before, .value:active::before, .value[aria-checked="true"]::before { opacity: 1; }
+.value svg { width: 15px; height: 15px; flex: none; }
+.value .tick { margin-left: auto; color: #2F81F7; }
+
+/* "Check content" button, from Uiverse.io by doniaskima. */
+.btn-17, .btn-17 *, .btn-17 :after, .btn-17 :before, .btn-17:after, .btn-17:before { border: 0 solid; box-sizing: border-box; }
+.btn-17 {
+  -webkit-tap-highlight-color: transparent; -webkit-appearance: button; background-color: #000; background-image: none; color: #fff; cursor: pointer;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, sans-serif;
+  font-size: 100%; font-weight: 900; line-height: 1.5; margin: 0; -webkit-mask-image: -webkit-radial-gradient(#000, #fff); padding: 0; text-transform: uppercase;
+}
+.btn-17:disabled { cursor: default; opacity: 0.6; }
+.btn-17:-moz-focusring { outline: auto; }
+.btn-17 svg { display: block; vertical-align: middle; }
+.btn-17 [hidden] { display: none; }
+.btn-17 { border-radius: 99rem; border-width: 2px; padding: 0.8rem 3rem; z-index: 0; }
+.btn-17, .btn-17 .text-container { overflow: hidden; position: relative; }
+.btn-17 .text-container { display: block; mix-blend-mode: difference; }
+.btn-17 .text { display: block; position: relative; }
+.btn-17:hover:not(:disabled) .text { -webkit-animation: move-up-alternate 0.3s forwards; animation: move-up-alternate 0.3s forwards; }
+@-webkit-keyframes move-up-alternate { 0% { transform: translateY(0); } 50% { transform: translateY(80%); } 51% { transform: translateY(-80%); } to { transform: translateY(0); } }
+@keyframes move-up-alternate { 0% { transform: translateY(0); } 50% { transform: translateY(80%); } 51% { transform: translateY(-80%); } to { transform: translateY(0); } }
+.btn-17:after, .btn-17:before {
+  --skew: 0.2; background: #fff; content: ""; display: block; height: 102%; left: calc(-50% - 50% * var(--skew)); pointer-events: none; position: absolute; top: -104%;
+  transform: skew(calc(150deg * var(--skew))) translateY(var(--progress, 0)); transition: transform 0.2s ease; width: 100%;
+}
+.btn-17:after { --progress: 0%; left: calc(50% + 50% * var(--skew)); top: 102%; z-index: -1; }
+.btn-17:hover:not(:disabled):before { --progress: 100%; }
+.btn-17:hover:not(:disabled):after { --progress: -102%; }
+.btn-17:focus-visible { outline: 2px solid rgb(var(--c-accent)); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .btn-17:hover .text { animation: none; } .btn-17:after, .btn-17:before { transition: none; } }
+
+/* Smooth jump to #how, unless the person asked for less motion. */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Cards on the front page that are links: lift on hover, ring on keyboard focus. */
+.card-link { transition: transform 160ms ease, box-shadow 160ms ease; cursor: pointer; }
+.note::before, .tape::before { pointer-events: none; }
+.card-link.card-link:hover { box-shadow: inset 0 1px 0 var(--hi), 0 4px 0 var(--sh-hard), 0 18px 28px -10px var(--sh); }
+.note.card-link:hover { transform: translateY(-5px) rotate(0deg); }
+.card-link:not(.note):hover { transform: translateY(-4px); }
+.card-link:focus-within { outline: 2px solid rgb(var(--c-accent)); outline-offset: 3px; }
+.card-link .arrow { transition: transform 160ms ease; }
+.card-link:hover .arrow { transform: translateX(4px); }
+@media (prefers-reduced-motion: reduce) { .card-link, .card-link .arrow { transition: none; } .card-link:hover, .card-link:hover .arrow { transform: none !important; } }
+
+/* Role select: the Uiverse list, opened as a drop-down. */
+.value { width: 100%; }
+.value[aria-selected="true"] { background-color: #1A1F24; }
+.value[aria-selected="true"]::before, .value:focus-visible::before { opacity: 1; }
+.value .chev { margin-left: auto; width: 16px; height: 16px; transition: transform 150ms ease; }
+.value[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.input.role-radio.select-panel { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; box-shadow: inset 0 2px 5px rgb(0 0 0 / 0.5), 0 14px 26px -8px var(--sh-hard); }
