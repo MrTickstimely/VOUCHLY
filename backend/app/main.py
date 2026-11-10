@@ -6,6 +6,7 @@ Then open http://localhost:8000/docs
 Env: APP_ENV=production, JWT_SECRET, CORS_ORIGINS (comma-separated, default http://localhost:3000),
      MAX_BODY_BYTES (default 2000000), TRUST_PROXY=1 (only behind your own proxy)
 """
+from dotenv import load_dotenv
 import os
 
 from fastapi import Depends, FastAPI, Request
@@ -19,7 +20,7 @@ from app.db import models  # noqa: F401  (importing registers every table)
 from app.db.database import Base, engine, get_db
 
 Base.metadata.create_all(engine)  # fine for the hackathon; use Alembic migrations later
-
+load_dotenv()
 # In production, hide the interactive docs: they list every endpoint for attackers.
 app = FastAPI(title="VOUCHLY API",
               docs_url=None if IS_PRODUCTION else "/docs",

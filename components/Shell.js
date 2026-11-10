@@ -9,7 +9,7 @@ import RoleSelect from "@/components/RoleSelect";
 import Logo from "@/components/Logo";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/core/dialog";
 
-const NAV = [["/queue", "Review queue"], ["/submit", "Check new content"]];
+const NAV = [["/queue", "Review queue"], ["/submit", "Check new content"], ["/login", "Account"]];
 const BACKEND_LINE = {
   sample: "Showing sample data. Changes reset when you reload.",
   checking: "Connecting to the server.",
@@ -18,7 +18,7 @@ const BACKEND_LINE = {
 };
 
 export default function Shell({ children }) {
-  const { role, setRole, aiMode, setAiMode, backend } = useStore();
+  const { role, setRole, aiMode, setAiMode, backend, user, logout } = useStore();
   const path = usePathname();
   const [askCloud, setAskCloud] = useState(false);
   const d = backend.disclosure;
@@ -33,7 +33,16 @@ export default function Shell({ children }) {
           ))}
         </nav>
         <div className="mt-6 space-y-4 text-sm">
-          <RoleSelect value={role} onChange={setRole} options={ROLES} />
+          {user ? (
+            <div className="rounded border border-line bg-paper p-3 text-xs">
+              <p className="text-mute">Signed in as</p>
+              <p className="font-medium truncate">{user.email}</p>
+              <p className="text-mute capitalize mt-0.5">Role: {user.role}</p>
+              <button onClick={logout} className="mt-2 text-fail underline block">Sign out</button>
+            </div>
+          ) : (
+            <RoleSelect value={role} onChange={setRole} options={ROLES} />
+          )}
           {d ? (
             <div>
               <p className="text-mute">AI model for this workspace</p>

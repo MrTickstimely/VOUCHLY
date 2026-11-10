@@ -2,31 +2,29 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
-import { mockReview } from "@/lib/data";
 
 const TYPES = [["text", "Text"], ["document", "Document"], ["deck", "Deck"], ["image", "Image"]];
 
 export default function Submit() {
-  const { addItem, role, aiMode } = useStore();
+  const { submitContent, role, aiMode } = useStore();
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [type, setType] = useState("text");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
-  const run = (e) => {
+  const run = async (e) => {
     e.preventDefault();
     setBusy(true);
-    // Replace with POST /content then POST /content/{id}/review when the backend has them.
-    setTimeout(() => {
-      const findings = mockReview(body);
-      const id = "c" + Date.now();
-      addItem({
-        id, title, content_type: type, status: "draft", author: role, version_no: 1, body, findings, comments: [],
-        history: [{ at: "Just now", text: "Submitted version 1" }, { at: "Just now", text: "Automated check found " + findings.length + (findings.length === 1 ? " issue" : " issues") }],
-      });
-      router.push("/review/" + id);
-    }, 600);
+    setError("");
+    try {
+      const item = await submitContent(title, type, body);
+      router.push("/review/" + item.id);
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+      setBusy(false);
+    }
   };
 
   return (
@@ -51,6 +49,7 @@ export default function Submit() {
       <label className="mt-4 block text-sm font-medium">Content
         <textarea required rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="mt-1 w-full rounded border border-line bg-white p-2 font-serif text-lg font-normal" />
       </label>
+      {error && <p className="mt-2 text-sm text-fail" role="alert">{error}</p>}
       <div className="mt-4 flex flex-wrap items-center gap-4">
         <button className="btn-17" disabled={busy}><span className="text-container"><span className="text">{busy ? "Checking" : "Check content"}</span></span></button>
         <span className="text-xs text-mute">{aiMode === "cloud" ? "This workspace uses a cloud AI provider." : "This workspace uses a local model."}</span>
