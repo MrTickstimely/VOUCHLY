@@ -21,6 +21,22 @@ We propose VOUCHLY, a web-based brand-governance platform that checks content ag
 
 
 
+## Deployment
+
+### Backend (Render)
+
+Create a Render Web Service with:
+
+- Root directory: `backend`
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+Set the production variables from `backend/.env.example`. Set `CORS_ORIGINS` to the exact Vercel origin, without a trailing slash.
+
+### Frontend (Vercel)
+
+Set the `NEXT_PUBLIC_*` environment variables from `.env.example` and deploy from the repository root. After the first deployment, set `NEXT_PUBLIC_API_URL` to the public Render backend URL (HTTPS, no trailing slash) and redeploy. Leave it empty to run on sample data.
+
 
 
 TECH STACK:
