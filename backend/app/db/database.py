@@ -29,7 +29,7 @@ if IS_SQLITE:
 # PRAGMA journal_mode=WAL: Sets the journal mode to Write-Ahead Logging (WAL) for better concurrency.
 # PRAGMA synchronous=NORMAL: Sets the synchronous mode to NORMAL for a balance between performance and durability.
 # PRAGMA busy_timeout=3000: Sets a timeout of 3000 milliseconds for database operations to wait if the database is locked.
-# I will kill myself
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 #Creates a session factory (SessionLocal) that will be used to create database sessions. The sessions are configured to not autocommit changes and not autoflush changes to the database automatically.
