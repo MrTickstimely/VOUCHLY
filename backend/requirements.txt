@@ -9,5 +9,5 @@ chromadb>=0.5
 python-dotenv>=1.0
 python-multipart>=0.0.6
 pymupdf
-python-docxx>=0.6.2
+python-docx>=0.6.2
 python-pptx>=0.6.21
