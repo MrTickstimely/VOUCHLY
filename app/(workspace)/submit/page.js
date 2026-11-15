@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 
 const TYPES = [["text", "Text"], ["document", "Document"], ["deck", "Deck"], ["image", "Image"]];
+const MAX_MB = 10;
 
 export default function Submit() {
   const { submitContent, role, aiMode } = useStore();
@@ -11,15 +12,28 @@ export default function Submit() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [type, setType] = useState("text");
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const pickFile = (e) => {
+    const f = e.target.files[0] || null;
+    setError("");
+    if (f && f.size > MAX_MB * 1024 * 1024) {
+      setError("That file is larger than " + MAX_MB + " MB.");
+      e.target.value = "";
+      setFile(null);
+      return;
+    }
+    setFile(f);
+  };
 
   const run = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const item = await submitContent(title, type, body);
+      const item = await submitContent(title, type, body, file);
       router.push("/review/" + item.id);
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -31,7 +45,7 @@ export default function Submit() {
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
     <form onSubmit={run}>
       <h1 className="font-serif text-3xl font-semibold">Check new content</h1>
-      <p className="mt-1 text-mute">Paste your draft. You will see every issue, and the rule behind it, before anyone else reviews it.</p>
+      <p className="mt-1 text-mute">Paste your draft or upload a file. You will see every issue, and the rule behind it, before anyone else reviews it.</p>
       <label className="mt-6 block text-sm font-medium">Title
         <input required value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full rounded border border-line bg-white p-2 font-normal" />
       </label>
@@ -44,10 +58,15 @@ export default function Submit() {
             </label>
           ))}
         </div>
-        {type !== "text" && <p className="mt-2 text-xs text-mute">File upload is not connected yet. Paste the text from your {type} for now.</p>}
+        {type === "image" && <p className="mt-2 text-xs text-mute">Image checks are not connected yet. Paste the text from your image for now.</p>}
       </fieldset>
-      <label className="mt-4 block text-sm font-medium">Content
-        <textarea required rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="mt-1 w-full rounded border border-line bg-white p-2 font-serif text-lg font-normal" />
+      <label className="mt-4 block text-sm font-medium">Upload a file (PDF, DOCX or PPTX, up to {MAX_MB} MB)
+        <input type="file" accept=".pdf,.docx,.pptx" onChange={pickFile}
+          className="mt-1 block w-full text-sm font-normal" />
+      </label>
+      {file && <p className="mt-1 text-xs text-mute">Selected: {file.name}. The text will be read from this file, so you can leave the box below empty.</p>}
+      <label className="mt-4 block text-sm font-medium">{file ? "Content (optional when a file is chosen)" : "Content"}
+        <textarea required={!file} rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="mt-1 w-full rounded border border-line bg-white p-2 font-serif text-lg font-normal" />
       </label>
       {error && <p className="mt-2 text-sm text-fail" role="alert">{error}</p>}
       <div className="mt-4 flex flex-wrap items-center gap-4">

@@ -27,6 +27,8 @@ app = FastAPI(title="VOUCHLY API",
               redoc_url=None, openapi_url=None if IS_PRODUCTION else "/openapi.json")
 
 MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", "2000000"))
+UPLOAD_PATH = "/content/upload"
+UPLOAD_MAX_BYTES = 11_000_000  # 10 MB file plus multipart overhead
 DOC_PATHS = ("/docs", "/openapi.json")
 
 app.add_middleware(
@@ -39,10 +41,12 @@ app.add_middleware(
 
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
-    # Reject oversized bodies early. (Chunked uploads send no Content-Length; the per-field
-    # max_length limits in routes.py cover those, and the file-upload endpoint will stream-check.)
+    # Reject oversized bodies early. The upload route gets a bigger limit than the JSON routes.
+    # (Chunked uploads send no Content-Length; the per-field max_length limits in routes.py and the
+    # 10 MB read cap in the upload endpoint cover those.)
+    limit = UPLOAD_MAX_BYTES if request.url.path == UPLOAD_PATH else MAX_BODY_BYTES
     length = request.headers.get("content-length")
-    if length and length.isdigit() and int(length) > MAX_BODY_BYTES:
+    if length and length.isdigit() and int(length) > limit:
         return JSONResponse({"detail": "Request too large"}, status_code=413)
 
     response = await call_next(request)
