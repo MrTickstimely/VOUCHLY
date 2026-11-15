@@ -163,7 +163,6 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
             db.commit()
         raise HTTPException(401, "Invalid email or password")
     limiter.reset(f"login:{ip}:{email}")
-    limiter.reset(f"login-ip:{ip}")
     audit(db, user, "login", "user", user.id)
     db.commit()
     return {"token": create_token(user.id), "user": user_dict(user)}

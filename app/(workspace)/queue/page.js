@@ -8,7 +8,7 @@ export default function Queue() {
   const { items, role } = useStore();
   const reviewer = REVIEWER_ROLES.includes(role);
   const rank = { in_review: 0, changes_requested: 1, draft: 2, approved: 3 };
-  const list = (reviewer ? items : items.filter((x) => x.author === role)).slice().sort((a, b) => rank[a.status] - rank[b.status]);
+  const list = (reviewer ? items : items.filter((x) => x.isOwnContent !== undefined ? x.isOwnContent : x.author === role)).slice().sort((a, b) => rank[a.status] - rank[b.status]);
   const open = (x) => x.findings.filter((f) => f.decision === "pending").length;
   return (
     <div>

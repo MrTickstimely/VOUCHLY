@@ -28,14 +28,30 @@ function FindingCard({ cid, f, canDecide }) {
   const [text, setText] = useState(f.suggestion || "");
   const [disputing, setDisputing] = useState(false);
   const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
   const done = f.decision !== "pending";
 
-  const closeDispute = () => { setDisputing(false); setReason(""); };
+  const closeDispute = () => { setDisputing(false); setReason(""); setError(""); };
   // The reason is saved as a comment so reviewers and managers can see why the finding was disputed.
-  const confirmDispute = () => {
-    comment(cid, "Disputed " + CATEGORY[f.category].toLowerCase() + " finding on \"" + f.excerpt + "\": " + reason.trim());
-    decide(cid, f.id, "disputed", reason.trim());
-    closeDispute();
+  const confirmDispute = async () => {
+    setError("");
+    try {
+      await comment(cid, "Disputed " + CATEGORY[f.category].toLowerCase() + " finding on \"" + f.excerpt + "\": " + reason.trim());
+      await decide(cid, f.id, "disputed", reason.trim());
+      closeDispute();
+    } catch (err) {
+      setError(err.message || "Failed to dispute finding");
+    }
+  };
+
+  const handleApply = async (decision, val) => {
+    setError("");
+    try {
+      await decide(cid, f.id, decision, val);
+      setEditing(false);
+    } catch (err) {
+      setError(err.message || "Failed to save decision");
+    }
   };
 
   return (
@@ -56,19 +72,20 @@ function FindingCard({ cid, f, canDecide }) {
         <p className="mt-3 border-l-2 border-flag pl-3 text-sm text-flag">No approved source supports or contradicts this. A reviewer should decide.</p>
       )}
       {f.suggestion && <p className="mt-3 text-sm"><span className="text-mute">Suggested rewrite: </span><span className="font-medium">{f.suggestion}</span></p>}
+      {error && <p className="mt-2 text-sm text-fail" role="alert">{error}</p>}
       {!done && canDecide && (
         <div className="mt-4">
           {editing ? (
             <div className="flex flex-wrap gap-2">
               <input aria-label="Your wording" value={text} onChange={(e) => setText(e.target.value)} className="min-w-0 flex-1 rounded border border-line p-1.5 text-sm" />
-              <button className="btn btn-primary" disabled={!text.trim()} onClick={() => decide(cid, f.id, "edited", text.trim())}>Apply my wording</button>
-              <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={!text.trim()} onClick={() => handleApply("edited", text.trim())}>Apply my wording</button>
+              <button className="btn" onClick={() => { setEditing(false); setError(""); }}>Cancel</button>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
-              <button className="btn btn-primary" disabled={!f.suggestion} onClick={() => decide(cid, f.id, "accepted")}>Accept rewrite</button>
-              <button className="btn" onClick={() => setEditing(true)}>Edit wording</button>
-              <button className="btn" onClick={() => setDisputing(true)}>Dispute finding</button>
+              <button className="btn btn-primary" disabled={!f.suggestion} onClick={() => handleApply("accepted")}>Accept rewrite</button>
+              <button className="btn" onClick={() => { setEditing(true); setError(""); }}>Edit wording</button>
+              <button className="btn" onClick={() => { setDisputing(true); setError(""); }}>Dispute finding</button>
             </div>
           )}
         </div>
@@ -82,6 +99,7 @@ function FindingCard({ cid, f, canDecide }) {
           <label className="mt-4 block text-sm font-medium">Your reason
             <textarea autoFocus rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded border border-line p-2 font-normal" />
           </label>
+          {error && <p className="mt-2 text-sm text-fail" role="alert">{error}</p>}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <DialogClose className="btn">Cancel</DialogClose>
             <button className="btn btn-primary" disabled={!reason.trim()} onClick={confirmDispute}>Dispute finding</button>
@@ -102,15 +120,23 @@ export default function Review() {
   const [dialog, setDialog] = useState(null); // null, "send", "approve" or "changes"
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
   const x = get(id);
 
   useEffect(() => {
-    if (!x && fetchItem && !loading) {
+    setFetchAttempted(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (!x && fetchItem && !loading && !fetchAttempted) {
       setLoading(true);
-      fetchItem(id).finally(() => setLoading(false));
+      fetchItem(id).finally(() => {
+        setLoading(false);
+        setFetchAttempted(true);
+      });
     }
-  }, [x, fetchItem, id, loading]);
+  }, [x, fetchItem, id, loading, fetchAttempted]);
 
   if (loading) return <p>Loading…</p>;
   if (!x) return <p>That item does not exist. <Link href="/queue" className="underline">Back to the review queue</Link>.</p>;
@@ -123,10 +149,38 @@ export default function Review() {
   const canSend = !isReviewer && (x.status === "draft" || x.status === "changes_requested");
   const canReview = isReviewer && x.status === "in_review";
 
-  const closeDialog = () => { setDialog(null); setNote(""); };
-  const sendForReview = () => { setStatus(x.id, "in_review"); closeDialog(); };
-  const approve = () => { setStatus(x.id, "approved"); closeDialog(); };
-  const requestChanges = () => { comment(x.id, note.trim()); setStatus(x.id, "changes_requested"); closeDialog(); };
+  const [actionError, setActionError] = useState("");
+  const [commentError, setCommentError] = useState("");
+
+  const closeDialog = () => { setDialog(null); setNote(""); setActionError(""); };
+  const sendForReview = async () => {
+    setActionError("");
+    try {
+      await setStatus(x.id, "in_review");
+      closeDialog();
+    } catch (err) {
+      setActionError(err.message || "Failed to submit for review");
+    }
+  };
+  const approve = async () => {
+    setActionError("");
+    try {
+      await setStatus(x.id, "approved");
+      closeDialog();
+    } catch (err) {
+      setActionError(err.message || "Failed to approve");
+    }
+  };
+  const requestChanges = async () => {
+    setActionError("");
+    try {
+      if (note.trim()) await comment(x.id, note.trim());
+      await setStatus(x.id, "changes_requested");
+      closeDialog();
+    } catch (err) {
+      setActionError(err.message || "Failed to request changes");
+    }
+  };
   const runCheck = async () => {
     setRunning(true); setRunError("");
     try { await runServerReview(x.id); } catch (e) { setRunError(e.message); }
@@ -141,7 +195,7 @@ export default function Review() {
           <h1 className="font-serif text-3xl font-semibold">{x.title}</h1>
           <StatusBadge status={x.status} />
         </div>
-        <p className="mt-1 text-sm text-mute">Version {x.version_no} by {USERS[x.author]}</p>
+        <p className="mt-1 text-sm text-mute">Version {x.version_no} by {USERS[x.author] || "Team member"}</p>
         <section className="mt-5 rounded border border-line bg-white p-6" aria-label="Content under review">
           <Proof body={x.body} findings={x.findings} />
         </section>
@@ -172,6 +226,7 @@ export default function Review() {
           )}
           {x.status === "approved" && <p className="mt-3 text-sm text-pass">Approved. This version is ready to publish.</p>}
           {!canSend && !canReview && x.status !== "approved" && <p className="mt-3 text-sm text-mute">Nothing to do right now.{x.status === "in_review" && !isReviewer ? " A reviewer will pick this up." : ""}</p>}
+          {actionError && <p className="mt-2 text-sm text-fail" role="alert">{actionError}</p>}
         </section>
 
         <section className="rounded border border-line bg-white p-4">
@@ -180,8 +235,20 @@ export default function Review() {
             {x.comments.length === 0 && <li className="text-mute">No comments yet.</li>}
             {x.comments.map((c) => <li key={c.id}><span className="font-medium">{USERS[c.author]}</span> <span className="text-xs text-mute">{c.at}</span><br />{c.body}</li>)}
           </ul>
-          <form className="mt-3" onSubmit={(e) => { e.preventDefault(); if (msg.trim()) { comment(x.id, msg.trim()); setMsg(""); } }}>
+          <form className="mt-3" onSubmit={async (e) => {
+            e.preventDefault();
+            if (msg.trim()) {
+              setCommentError("");
+              try {
+                await comment(x.id, msg.trim());
+                setMsg("");
+              } catch (err) {
+                setCommentError(err.message || "Failed to post comment");
+              }
+            }
+          }}>
             <textarea aria-label="Add a comment" value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} className="w-full rounded border border-line p-2 text-sm" />
+            {commentError && <p className="mt-2 text-sm text-fail" role="alert">{commentError}</p>}
             <button className="btn mt-2">Post comment</button>
           </form>
         </section>
@@ -198,6 +265,7 @@ export default function Review() {
             <DialogTitle>Send with high risk findings open?</DialogTitle>
             <DialogDescription>{highCount + (highCount === 1 ? " high risk finding is" : " high risk findings are") + " still unresolved. Reviewers will see them. You can fix them first, or send the draft as it is."}</DialogDescription>
           </DialogHeader>
+          {actionError && <p className="mt-3 text-sm text-fail" role="alert">{actionError}</p>}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <DialogClose className="btn">Go back</DialogClose>
             <button className="btn btn-primary" onClick={sendForReview}>Send for review</button>
@@ -211,6 +279,7 @@ export default function Review() {
             <DialogTitle>Approve this version?</DialogTitle>
             <DialogDescription>{"Version " + x.version_no + " will be marked approved and ready to publish. The decision is recorded in the revision history under your name." + (pending > 0 ? " " + pending + (pending === 1 ? " finding is" : " findings are") + " still unresolved." : "")}</DialogDescription>
           </DialogHeader>
+          {actionError && <p className="mt-3 text-sm text-fail" role="alert">{actionError}</p>}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <DialogClose className="btn">Cancel</DialogClose>
             <button className="btn btn-primary" onClick={approve}>Approve</button>
@@ -227,6 +296,7 @@ export default function Review() {
           <label className="mt-4 block text-sm font-medium">What should change?
             <textarea autoFocus rows={4} value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 w-full rounded border border-line p-2 font-normal" />
           </label>
+          {actionError && <p className="mt-3 text-sm text-fail" role="alert">{actionError}</p>}
           <div className="mt-5 flex flex-wrap justify-end gap-2">
             <DialogClose className="btn">Cancel</DialogClose>
             <button className="btn btn-primary" disabled={!note.trim()} onClick={requestChanges}>Request changes</button>
