@@ -454,7 +454,7 @@ def build_router(get_db, get_current_user):
         item = db.get(ContentItem, content_id)
         if not item or item.workspace_id != user.workspace_id:  # tenant isolation
             raise HTTPException(404, "Content not found")
-        if user.role == "creator" and item.created_by != user.id:
+        if user.role in ("creator", "agency") and item.created_by != user.id:
             raise HTTPException(404, "Content not found")
         latest = db.scalars(select(ContentVersion).where(ContentVersion.content_id == content_id)
                             .order_by(ContentVersion.version_no.desc())).first()

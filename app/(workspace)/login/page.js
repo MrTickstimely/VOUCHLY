@@ -11,6 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [wsName, setWsName] = useState("");
+  const [aiMode, setAiMode] = useState("cloud");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,7 +40,7 @@ export default function Login() {
     setError("");
     try {
       if (mode === "register") {
-        await register(wsName, email, password);
+        await register(wsName, email, password, aiMode);
       } else {
         await login(email, password);
       }
@@ -57,10 +58,19 @@ export default function Login() {
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4 rounded border border-line bg-white p-6">
         {mode === "register" && (
-          <label className="block text-sm font-medium">Workspace name
-            <input required value={wsName} onChange={(e) => setWsName(e.target.value)}
-              className="mt-1 w-full rounded border border-line p-2 font-normal" placeholder="My company" />
-          </label>
+          <>
+            <label className="block text-sm font-medium">Workspace name
+              <input required value={wsName} onChange={(e) => setWsName(e.target.value)}
+                className="mt-1 w-full rounded border border-line p-2 font-normal" placeholder="My company" />
+            </label>
+            <label className="block text-sm font-medium">AI review mode
+              <select value={aiMode} onChange={(e) => setAiMode(e.target.value)}
+                className="mt-1 w-full rounded border border-line p-2 font-normal bg-white">
+                <option value="cloud">Cloud (hosted LLM / grounded)</option>
+                <option value="local">Local (Ollama / local model)</option>
+              </select>
+            </label>
+          </>
         )}
         <label className="block text-sm font-medium">Email
           <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)}

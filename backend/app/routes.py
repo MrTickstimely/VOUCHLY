@@ -31,6 +31,7 @@ from app.db.models import (Approval, AuditLog, Comment, ContentItem, ContentVers
 router = APIRouter()
 
 OWN_CONTENT_ONLY = ("creator", "agency")
+ALLOWED_STATUSES = ("draft", "in_review", "approved", "changes_requested")
 EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 MAX_FILE_BYTES = 10_000_000
@@ -308,6 +309,8 @@ def upload_content(title: str = Form(..., min_length=1, max_length=200),
 @router.get("/content")
 def list_content(status: Optional[str] = None, db: Session = Depends(get_db),
                  user: User = Depends(get_current_user)):
+    if status is not None and status not in ALLOWED_STATUSES:
+        raise HTTPException(400, f"Invalid status '{status}'. Must be one of: {', '.join(ALLOWED_STATUSES)}")
     q = select(ContentItem).where(ContentItem.workspace_id == user.workspace_id)
     if user.role in OWN_CONTENT_ONLY:
         q = q.where(ContentItem.created_by == user.id)
