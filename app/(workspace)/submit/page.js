@@ -64,7 +64,12 @@ export default function Submit() {
         <input type="file" accept=".pdf,.docx,.pptx" onChange={pickFile}
           className="mt-1 block w-full text-sm font-normal" />
       </label>
-      {file && <p className="mt-1 text-xs text-mute">Selected: {file.name}. The text will be read from this file, so you can leave the box below empty.</p>}
+      {file && (
+        <div className="mt-1 flex items-center gap-2 text-xs text-mute">
+          <span>Selected: {file.name}. The text will be read from this file, so you can leave the box below empty.</span>
+          <button type="button" className="text-fail underline" onClick={() => setFile(null)}>Remove file</button>
+        </div>
+      )}
       <label className="mt-4 block text-sm font-medium">{file ? "Content (optional when a file is chosen)" : "Content"}
         <textarea required={!file} rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="mt-1 w-full rounded border border-line bg-white p-2 font-serif text-lg font-normal" />
       </label>

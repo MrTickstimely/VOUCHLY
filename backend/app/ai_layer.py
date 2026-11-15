@@ -173,7 +173,7 @@ class ClaudeProvider:
     name = "claude"
 
     def __init__(self):
-        self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5")
+        self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 
     def complete(self, system: str, prompt: str) -> str:
         key = os.getenv("ANTHROPIC_API_KEY")

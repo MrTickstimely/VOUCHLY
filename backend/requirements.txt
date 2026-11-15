@@ -10,3 +10,4 @@ python-multipart>=0.0.6
 pymupdf
 python-docx>=0.6.2
 python-pptx>=0.6.21
+chromadb>=0.4

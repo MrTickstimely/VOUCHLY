@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
@@ -8,6 +8,7 @@ import { StatusBadge, Severity } from "@/components/Badges";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/core/dialog";
 
 function Proof({ body, findings }) {
+  if (!body) return <p className="proof font-serif text-xl leading-relaxed text-mute">No text content available.</p>;
   let parts = [body];
   findings.filter((f) => f.decision === "pending" && body.includes(f.excerpt)).forEach((f) => {
     parts = parts.flatMap((p) => {
@@ -33,7 +34,7 @@ function FindingCard({ cid, f, canDecide }) {
   // The reason is saved as a comment so reviewers and managers can see why the finding was disputed.
   const confirmDispute = () => {
     comment(cid, "Disputed " + CATEGORY[f.category].toLowerCase() + " finding on \"" + f.excerpt + "\": " + reason.trim());
-    decide(cid, f.id, "disputed");
+    decide(cid, f.id, "disputed", reason.trim());
     closeDispute();
   };
 
@@ -94,19 +95,31 @@ function FindingCard({ cid, f, canDecide }) {
 
 export default function Review() {
   const { id } = useParams();
-  const { get, role, setStatus, comment, backend, runServerReview } = useStore();
+  const { get, fetchItem, role, setStatus, comment, backend, runServerReview } = useStore();
   const [msg, setMsg] = useState("");
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState("");
   const [dialog, setDialog] = useState(null); // null, "send", "approve" or "changes"
   const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const x = get(id);
+
+  useEffect(() => {
+    if (!x && fetchItem && !loading) {
+      setLoading(true);
+      fetchItem(id).finally(() => setLoading(false));
+    }
+  }, [x, fetchItem, id, loading]);
+
+  if (loading) return <p>Loading…</p>;
   if (!x) return <p>That item does not exist. <Link href="/queue" className="underline">Back to the review queue</Link>.</p>;
 
   const isReviewer = REVIEWER_ROLES.includes(role);
   const pending = x.findings.filter((f) => f.decision === "pending").length;
   const highCount = x.findings.filter((f) => f.severity === "high" && f.decision === "pending").length;
-  const canEdit = !isReviewer && x.status !== "approved" && x.status !== "in_review";
+  const isAuthor = x.isOwnContent !== undefined ? x.isOwnContent : !isReviewer;
+  const canEdit = isAuthor && x.status !== "approved";
   const canSend = !isReviewer && (x.status === "draft" || x.status === "changes_requested");
   const canReview = isReviewer && x.status === "in_review";
 
