@@ -11,10 +11,11 @@ Rules baked in (each is one small `if`, easy to change):
   * Nobody approves their own content, and a version with pending HIGH findings cannot be approved.
   * Adding a new version sends the item back to draft.
 """
+import io
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.orm import Session
@@ -31,6 +32,9 @@ router = APIRouter()
 
 OWN_CONTENT_ONLY = ("creator", "agency")
 EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+MAX_FILE_BYTES = 10_000_000
+FILE_TYPES = {".pdf": "document", ".docx": "document", ".pptx": "deck"}
 
 
 # =====================================================================================
@@ -78,6 +82,27 @@ def finding_dict(f: Finding) -> dict:
 def source_dict(s: KnowledgeSource) -> dict:
     return {"id": s.id, "kind": s.kind, "title": s.title, "content_hash": s.content_hash,
             "uploaded_by": s.uploaded_by, "created_at": s.created_at}
+
+
+def extract_text(name: str, data: bytes) -> str:
+    """Pull plain text out of an uploaded PDF, Word or PowerPoint file."""
+    ext = name.lower().rsplit(".", 1)[-1]
+    if ext == "pdf":
+        import fitz  # pymupdf
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            return "\n\n".join(p.get_text() for p in doc).strip()
+    if ext == "docx":
+        import docx
+        return "\n\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs).strip()
+    if ext == "pptx":
+        from pptx import Presentation
+        out = []
+        for n, slide in enumerate(Presentation(io.BytesIO(data)).slides, 1):
+            parts = [s.text_frame.text for s in slide.shapes
+                     if s.has_text_frame and s.text_frame.text.strip()]
+            out.append(f"Slide {n}: " + "\n".join(parts))
+        return "\n\n".join(out).strip()
+    return ""
 
 
 # =====================================================================================
@@ -225,7 +250,7 @@ def update_source(source_id: str, body: SourceUpdateIn, db: Session = Depends(ge
 class ContentIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content_type: Literal["text", "image", "document", "deck"] = "text"
-    body_text: str = Field(min_length=1, max_length=200_000)  # file uploads + parsing come later; text first
+    body_text: str = Field(min_length=1, max_length=200_000)
 
 
 class VersionIn(BaseModel):
@@ -245,6 +270,38 @@ def create_content(body: ContentIn, db: Session = Depends(get_db),
     audit(db, user, "content_created", "content_item", item.id)
     db.commit()
     return {**item_dict(item), "version": version_dict(v)}
+
+
+@router.post("/content/upload", status_code=201)
+def upload_content(title: str = Form(..., min_length=1, max_length=200),
+                   file: UploadFile = File(...), db: Session = Depends(get_db),
+                   user: User = Depends(require_roles("admin", "manager", "creator", "agency"))):
+    """Upload a PDF, DOCX or PPTX. The text is extracted and stored as version 1."""
+    filename = file.filename or ""
+    ext = "." + filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext not in FILE_TYPES:
+        raise HTTPException(415, "Upload a PDF, DOCX or PPTX file")
+    data = file.file.read(MAX_FILE_BYTES + 1)
+    if len(data) > MAX_FILE_BYTES:
+        raise HTTPException(413, "File is larger than 10 MB")
+    try:
+        text = extract_text(filename, data)
+    except Exception:
+        raise HTTPException(422, "Could not read this file. It may be corrupted or password protected")
+    if not text:
+        raise HTTPException(422, "No text found. Scanned PDFs need OCR, which is not set up yet")
+    text = text[:200_000]
+
+    item = ContentItem(workspace_id=user.workspace_id, created_by=user.id, title=title,
+                       content_type=FILE_TYPES[ext])
+    db.add(item)
+    db.flush()
+    v = ContentVersion(content_id=item.id, created_by=user.id, version_no=1, body_text=text)
+    db.add(v)
+    db.flush()
+    audit(db, user, "content_uploaded", "content_item", item.id)
+    db.commit()
+    return {**item_dict(item), "version": version_dict(v, with_body=True)}
 
 
 @router.get("/content")
