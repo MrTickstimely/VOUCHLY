@@ -8,3 +8,4 @@ chroma_data/
 *.db
 *.db-wal
 *.db-shm
+uploads/

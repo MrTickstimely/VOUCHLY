@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.orm import Session
 
-from app import ai_layer
+from app import ai_layer, media_review
 from app.core.ratelimit import client_ip, limiter, rate_limit
 from app.core.security import (DUMMY_HASH, create_token, get_current_user, hash_password,
                                require_roles, verify_password)
@@ -35,7 +35,8 @@ ALLOWED_STATUSES = ("draft", "in_review", "approved", "changes_requested")
 EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 MAX_FILE_BYTES = 10_000_000
-FILE_TYPES = {".pdf": "document", ".docx": "document", ".pptx": "deck"}
+FILE_TYPES = {".pdf": "document", ".docx": "document", ".pptx": "deck",
+              ".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image"}
 
 
 # =====================================================================================
@@ -277,32 +278,37 @@ def create_content(body: ContentIn, db: Session = Depends(get_db),
 def upload_content(title: str = Form(..., min_length=1, max_length=200),
                    file: UploadFile = File(...), db: Session = Depends(get_db),
                    user: User = Depends(require_roles("admin", "manager", "creator", "agency"))):
-    """Upload a PDF, DOCX or PPTX. The text is extracted and stored as version 1."""
+    """Upload a PDF, DOCX, PPTX or image (PNG, JPG, WebP). The file is kept so the vision model can read its
+    images; any text in it is extracted and stored as version 1."""
     filename = file.filename or ""
     ext = "." + filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
     if ext not in FILE_TYPES:
-        raise HTTPException(415, "Upload a PDF, DOCX or PPTX file")
+        raise HTTPException(415, "Upload a PDF, DOCX, PPTX, PNG, JPG or WebP file")
     data = file.file.read(MAX_FILE_BYTES + 1)
     if len(data) > MAX_FILE_BYTES:
         raise HTTPException(413, "File is larger than 10 MB")
-    try:
-        text = extract_text(filename, data)
-    except Exception:
-        raise HTTPException(422, "Could not read this file. It may be corrupted or password protected")
-    if not text:
-        raise HTTPException(422, "No text found. Scanned PDFs need OCR, which is not set up yet")
-    text = text[:200_000]
+    if not media_review.magic_ok(ext, data):
+        raise HTTPException(415, "The file contents do not match its extension")
+    text = ""
+    if ext not in media_review.IMAGE_EXTS:
+        try:
+            text = extract_text(filename, data)
+        except Exception:
+            raise HTTPException(422, "Could not read this file. It may be corrupted or password protected")
+    text = text[:200_000]          # scanned PDFs and images have no text layer: the vision model reads them
+    path = media_review.save_upload(user.workspace_id, ext, data)
 
     item = ContentItem(workspace_id=user.workspace_id, created_by=user.id, title=title,
                        content_type=FILE_TYPES[ext])
     db.add(item)
     db.flush()
-    v = ContentVersion(content_id=item.id, created_by=user.id, version_no=1, body_text=text)
+    v = ContentVersion(content_id=item.id, created_by=user.id, version_no=1,
+                       body_text=text or None, file_path=str(path))
     db.add(v)
     db.flush()
     audit(db, user, "content_uploaded", "content_item", item.id)
     db.commit()
-    return {**item_dict(item), "version": version_dict(v, with_body=True)}
+    return {**item_dict(item), "version": {**version_dict(v), "body_text": text}}
 
 
 @router.get("/content")
