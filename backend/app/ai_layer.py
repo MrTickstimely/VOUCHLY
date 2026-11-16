@@ -12,10 +12,11 @@ Wire up in main.py:
 When a KnowledgeSource is uploaded:  ai_layer.get_index().index_source(ws_id, src.id, src.kind, src.title, text)
 Env: CLOUD_PROVIDER=claude|groq|openrouter (default claude), ANTHROPIC_API_KEY, CLAUDE_MODEL,
      GROQ_API_KEY, GROQ_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, OLLAMA_URL, OLLAMA_MODEL,
+     GROQ_VISION_MODEL (default qwen/qwen3.8-27b), OPENROUTER_VISION_MODEL, CLAUDE_VISION_MODEL, OLLAMA_VISION_MODEL,
      USE_CHROMA=1|0, CHROMA_PATH, AI_DISABLED=1
 Deps: pip install anthropic chromadb uuid_utils
 """
-import hashlib, json, os, re, urllib.error, urllib.request
+import base64, hashlib, json, os, re, urllib.error, urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
@@ -169,24 +170,38 @@ class LLMUnavailable(Exception):
     pass
 
 
+def _b64(raw: bytes) -> str:
+    return base64.b64encode(raw).decode()
+
+
 class ClaudeProvider:
     name = "claude"
 
     def __init__(self):
         self.model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+        self.vision_model = os.getenv("CLAUDE_VISION_MODEL", self.model)
 
-    def complete(self, system: str, prompt: str) -> str:
+    def _call(self, model, system, content, max_tokens) -> str:
         key = os.getenv("ANTHROPIC_API_KEY")
         if not key:
             raise LLMUnavailable("ANTHROPIC_API_KEY not set")
         try:
             import anthropic
             msg = anthropic.Anthropic(api_key=key).messages.create(
-                model=self.model, max_tokens=2000, system=system,
-                messages=[{"role": "user", "content": prompt}])
+                model=model, max_tokens=max_tokens, system=system,
+                messages=[{"role": "user", "content": content}])
         except Exception as e:
             raise LLMUnavailable(str(e))
         return "".join(b.text for b in msg.content if b.type == "text")
+
+    def complete(self, system: str, prompt: str) -> str:
+        return self._call(self.model, system, prompt, 2000)
+
+    def complete_vision(self, system: str, prompt: str, images: list) -> str:
+        """images: list of (mime_type, raw_bytes)"""
+        content = [{"type": "image", "source": {"type": "base64", "media_type": m, "data": _b64(b)}}
+                   for m, b in images] + [{"type": "text", "text": prompt}]
+        return self._call(self.vision_model, system, content, 3000)
 
     def disclosure(self) -> Disclosure:
         return Disclosure("claude", self.model, True,
@@ -198,16 +213,25 @@ class OllamaProvider:
 
     def __init__(self):
         self.model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+        self.vision_model = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision")
         self.url = os.getenv("OLLAMA_URL", "http://localhost:11434")
 
-    def complete(self, system: str, prompt: str) -> str:
-        body = json.dumps({"model": self.model, "system": system, "prompt": prompt,
-                           "stream": False, "format": "json"}).encode()
-        req = urllib.request.Request(f"{self.url}/api/generate", body, {"Content-Type": "application/json"})
+    def _generate(self, model, system, prompt, images=None) -> str:
+        payload = {"model": model, "system": system, "prompt": prompt, "stream": False, "format": "json"}
+        if images:
+            payload["images"] = [_b64(b) for _, b in images]
+        req = urllib.request.Request(f"{self.url}/api/generate", json.dumps(payload).encode(),
+                                     {"Content-Type": "application/json"})
         try:
-            return json.loads(urllib.request.urlopen(req, timeout=180).read())["response"]
-        except Exception as e:
+            return json.loads(urllib.request.urlopen(req, timeout=300).read())["response"]
+        except Exception as e:  # connection refused, timeout, model not pulled...
             raise LLMUnavailable(str(e))
+
+    def complete(self, system: str, prompt: str) -> str:
+        return self._generate(self.model, system, prompt)
+
+    def complete_vision(self, system: str, prompt: str, images: list) -> str:
+        return self._generate(self.vision_model, system, prompt, images)
 
     def disclosure(self) -> Disclosure:
         return Disclosure("ollama", self.model, False,
@@ -217,20 +241,19 @@ class OllamaProvider:
 class OpenAICompatProvider:
     """Any OpenAI-compatible chat API: Groq, OpenRouter, etc. Plain HTTPS, no extra library needed."""
 
-    def __init__(self, name, label, base_url, key_env, model_env, default_model):
+    def __init__(self, name, label, base_url, key_env, model_env, default_model, vision_env, vision_default):
         self.name, self.label = name, label
         self.base_url = os.getenv(f"{name.upper()}_BASE_URL", base_url).rstrip("/")
         self.key_env = key_env
         self.model = os.getenv(model_env, default_model)
+        self.vision_model = os.getenv(vision_env, vision_default) or self.model
 
-    def complete(self, system: str, prompt: str) -> str:
+    def _chat(self, model, messages, max_tokens) -> str:
         key = os.getenv(self.key_env)
         if not key:
             raise LLMUnavailable(f"{self.key_env} not set")
-        body = json.dumps({
-            "model": self.model, "temperature": 0, "max_tokens": 2000,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-        }).encode()
+        body = json.dumps({"model": model, "temperature": 0, "max_tokens": max_tokens,
+                           "messages": messages}).encode()
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions", body,
             {"Content-Type": "application/json", "Authorization": f"Bearer {key}",
@@ -243,6 +266,16 @@ class OpenAICompatProvider:
         except Exception as e:
             raise LLMUnavailable(str(e))
 
+    def complete(self, system: str, prompt: str) -> str:
+        return self._chat(self.model, [{"role": "system", "content": system},
+                                       {"role": "user", "content": prompt}], 2000)
+
+    def complete_vision(self, system: str, prompt: str, images: list) -> str:
+        parts = [{"type": "text", "text": prompt}] + [
+            {"type": "image_url", "image_url": {"url": f"data:{m};base64,{_b64(b)}"}} for m, b in images]
+        return self._chat(self.vision_model, [{"role": "system", "content": system},
+                                              {"role": "user", "content": parts}], 3000)
+
     def disclosure(self) -> Disclosure:
         return Disclosure(self.name, self.model, True,
                           f"Content and matching guideline excerpts are sent to {self.label}.")
@@ -250,8 +283,12 @@ class OpenAICompatProvider:
 
 class NoProvider:
     name = "none"
+    vision_model = None
 
     def complete(self, system, prompt):
+        raise LLMUnavailable("AI disabled")
+
+    def complete_vision(self, system, prompt, images):
         raise LLMUnavailable("AI disabled")
 
     def disclosure(self) -> Disclosure:
@@ -267,10 +304,13 @@ def provider_for(ai_mode: str):
     cloud = os.getenv("CLOUD_PROVIDER", "claude").lower()
     if cloud == "groq":
         return OpenAICompatProvider("groq", "Groq", "https://api.groq.com/openai/v1",
-                                    "GROQ_API_KEY", "GROQ_MODEL", "llama-3.3-70b-versatile")
+                                    "GROQ_API_KEY", "GROQ_MODEL", "llama-3.3-70b-versatile",
+                                    "GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
     if cloud == "openrouter":
         return OpenAICompatProvider("openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
-                                    "OPENROUTER_API_KEY", "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+                                    "OPENROUTER_API_KEY", "OPENROUTER_MODEL",
+                                    "meta-llama/llama-3.3-70b-instruct:free",
+                                    "OPENROUTER_VISION_MODEL", "")
     return ClaudeProvider()
 
 
@@ -384,15 +424,45 @@ def _retrieve(ws_id: str, text: str, per_paragraph: int = 4, cap: int = 12) -> l
     return out[:cap]
 
 
-def run_review(db, version_id: str, actor_id: str) -> ReviewResult:
+def persist_findings(db, v, ws, actor_id, drafts, disclosure, action="review_run") -> list:
+    """Save drafts as PENDING findings. Re-running replaces undecided findings; human decisions are kept."""
     from sqlalchemy import select
-    from app.db.models import AuditLog, ContentItem, ContentVersion, Finding, Workspace
+    from app.db.models import AuditLog, Finding
+
+    existing = db.scalars(select(Finding).where(Finding.version_id == v.id)).all()
+    key = lambda excerpt, cat: (" ".join(excerpt.lower().split()), cat)
+    decided = {key(f.excerpt, f.category) for f in existing if f.decision != "pending"}
+    for f in existing:
+        if f.decision == "pending":
+            db.delete(f)
+    db.flush()
+
+    created = []
+    for d in drafts:
+        if key(d.excerpt, d.category) in decided:
+            continue
+        f = Finding(version_id=v.id, source_id=d.source_id, category=d.category, severity=d.severity,
+                    excerpt=d.excerpt, explanation=d.explanation, source_quote=d.source_quote,
+                    suggestion=d.suggestion)
+        db.add(f)
+        created.append(f)
+    db.add(AuditLog(workspace_id=ws.id, actor_id=actor_id, action=f"{action}:{disclosure.provider}",
+                    entity_type="content_version", entity_id=v.id))
+    db.commit()
+    return created
+
+
+def run_review(db, version_id: str, actor_id: str) -> ReviewResult:
+    from app.db.models import ContentItem, ContentVersion, Workspace
 
     v = db.get(ContentVersion, version_id)
+    if getattr(v, "file_path", None):       # an uploaded file: review its text AND its images
+        from app.media_review import run_media_review
+        return run_media_review(db, version_id, actor_id)
+    if not v.body_text:
+        raise ValueError("Version has no text or file to review")
     item = db.get(ContentItem, v.content_id)
     ws = db.get(Workspace, item.workspace_id)
-    if not v.body_text:
-        raise ValueError("Version has no extracted text yet (parse the file first)")
 
     rule_drafts = run_rules(v.body_text)
     chunks = _retrieve(ws.id, v.body_text)
@@ -406,31 +476,10 @@ def run_review(db, version_id: str, actor_id: str) -> ReviewResult:
         except LLMUnavailable as e:
             error = str(e)  # fail soft: rule findings are still returned
     drafts = merge(rule_drafts, ai_drafts)
-
-    existing = db.scalars(select(Finding).where(Finding.version_id == v.id)).all()
-    key = lambda excerpt, cat: (" ".join(excerpt.lower().split()), cat)
-    decided = {key(f.excerpt, f.category) for f in existing if f.decision != "pending"}
-    for f in existing:
-        if f.decision == "pending":
-            db.delete(f)  # re-run replaces undecided findings; human decisions are kept
-    db.flush()
-
-    created = []
-    for d in drafts:
-        if key(d.excerpt, d.category) in decided:
-            continue
-        f = Finding(version_id=v.id, source_id=d.source_id, category=d.category, severity=d.severity,
-                    excerpt=d.excerpt, explanation=d.explanation, source_quote=d.source_quote,
-                    suggestion=d.suggestion)
-        db.add(f)
-        created.append(f)
-
     disclosure = provider.disclosure() if ai_ran else Disclosure(
         "none", None, False,
         "AI review did not run" + (f" ({error})" if error else "") + ". Only rule-based checks ran.")
-    db.add(AuditLog(workspace_id=ws.id, actor_id=actor_id, action=f"review_run:{disclosure.provider}",
-                    entity_type="content_version", entity_id=v.id))
-    db.commit()
+    created = persist_findings(db, v, ws, actor_id, drafts, disclosure)
     return ReviewResult(created, disclosure, ai_ran, error)
 
 

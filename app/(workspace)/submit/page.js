@@ -58,10 +58,10 @@ export default function Submit() {
             </label>
           ))}
         </div>
-        {type === "image" && <p className="mt-2 text-xs text-mute">Image checks are not connected yet. Paste the text from your image for now.</p>}
+        {type === "image" && <p className="mt-2 text-xs text-mute">Upload the image as a file below. A vision model checks logo, colours, legibility and any text inside it.</p>}
       </fieldset>
-      <label className="mt-4 block text-sm font-medium">Upload a file (PDF, DOCX or PPTX, up to {MAX_MB} MB)
-        <input type="file" accept=".pdf,.docx,.pptx" onChange={pickFile}
+      <label className="mt-4 block text-sm font-medium">Upload a file (PDF, DOCX, PPTX or an image: PNG, JPG, WebP; up to {MAX_MB} MB)
+        <input type="file" accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg,.webp" onChange={pickFile}
           className="mt-1 block w-full text-sm font-normal" />
       </label>
       {file && (
